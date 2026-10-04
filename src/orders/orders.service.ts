@@ -35,6 +35,14 @@ interface OrderRow {
   line_total_cents: number | string | null;
 }
 
+/** The id of the order created from `cartId`, or null if the cart has not been checked out. */
+export async function findOrderIdByCartId(db: Queryable, cartId: string): Promise<string | null> {
+  const { rows } = await db.query<{ id: string }>('SELECT id FROM orders WHERE cart_id = $1', [
+    cartId,
+  ]);
+  return rows[0]?.id ?? null;
+}
+
 /**
  * Reads an order purely from its snapshot (orders + order_items), never from products,
  * so later price or name changes do not alter a placed order.

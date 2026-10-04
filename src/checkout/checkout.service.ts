@@ -1,19 +1,12 @@
 import type { PoolClient } from 'pg';
+import { withTransaction } from '../db/pool.js';
 import { AppError } from '../errors.js';
-import { getOrderView } from '../orders/orders.service.js';
-import { claimKey, saveResponse } from './idempotency.js';
-
-export interface CheckoutInput {
-  cartId: string;
-  idempotencyKey: string;
-  requestHash: string;
-}
+import { findOrderIdByCartId, getOrderView, type OrderView } from '../orders/orders.service.js';
 
 export interface CheckoutResult {
-  status: number;
-  body: unknown;
-  /** True when the response is a stored one for an idempotency key that was already used. */
-  replayed: boolean;
+  /** 201 when this call created the order, 200 when the cart was already checked out (a retry). */
+  status: 201 | 200;
+  order: OrderView;
 }
 
 interface LockedLine {
@@ -25,36 +18,52 @@ interface LockedLine {
 }
 
 /**
- * Turns an open cart into an order. Must run inside ONE transaction (withTransaction):
- * any thrown error rolls back everything, including the idempotency key claim, so only
- * successful checkouts are stored and a retry after a failure runs again.
+ * Turns an open cart into an order, in ONE transaction. The cart itself is the idempotency
+ * key: checking out the same cart again returns the order it already produced.
  *
- * Lock order (always the same, so concurrent checkouts cannot deadlock):
- * idempotency key -> cart row -> product rows by id.
+ * Any thrown error rolls back everything, so the cart stays open and a retry runs the
+ * checkout again.
+ *
+ * Lock order is always cart row -> product rows by id, so concurrent checkouts cannot deadlock.
  */
-export async function checkout(client: PoolClient, input: CheckoutInput): Promise<CheckoutResult> {
-  const { cartId, idempotencyKey, requestHash } = input;
+export function checkout(cartId: string): Promise<CheckoutResult> {
+  return withTransaction((client) => checkoutInTransaction(client, cartId));
+}
 
-  // a. Claim the idempotency key, or replay the response of the request that already used it.
-  const claim = await claimKey(client, idempotencyKey, requestHash);
-  if (!claim.claimed) {
-    return { status: claim.responseStatus, body: claim.responseBody, replayed: true };
-  }
-
-  // b. Close the cart. The row lock taken here also waits for any in-flight cart edit,
-  //    and makes concurrent checkouts of the same cart queue up behind this one.
+async function checkoutInTransaction(client: PoolClient, cartId: string): Promise<CheckoutResult> {
+  // a. Close the cart. This also takes the cart's row lock, which waits for any in-flight
+  //    cart edit and makes concurrent checkouts of the same cart queue up behind this one.
   const closed = await client.query(
     `UPDATE carts SET status = 'checked_out', updated_at = now()
       WHERE id = $1 AND status = 'open'
       RETURNING id`,
     [cartId],
   );
+
+  // b. Nothing was closed: the cart is missing, or this is a retry of a finished checkout.
+  //
+  //    Concurrent case: a parallel request for the same cart blocks in the UPDATE above on the
+  //    cart's row lock until the first checkout finishes.
+  //    - If the first one committed, the UPDATE re-checks the row, sees 'checked_out' and
+  //      matches nothing; the queries below (new statements, so a fresh READ COMMITTED
+  //      snapshot) then see the committed order, and we return that same order.
+  //    - If the first one rolled back, the cart is still 'open', so the UPDATE succeeds and
+  //      this request performs the checkout itself.
   if (closed.rowCount === 0) {
-    const exists = await client.query('SELECT 1 FROM carts WHERE id = $1', [cartId]);
-    if (exists.rowCount === 0) {
-      throw new AppError(404, 'CART_NOT_FOUND', `Cart ${cartId} not found`);
+    const { rows } = await client.query<{ status: string }>(
+      'SELECT status FROM carts WHERE id = $1',
+      [cartId],
+    );
+    const cart = rows[0];
+    if (!cart) throw new AppError(404, 'CART_NOT_FOUND', `Cart ${cartId} not found`);
+
+    const orderId = await findOrderIdByCartId(client, cartId);
+    if (cart.status !== 'checked_out' || orderId === null) {
+      // Unreachable through the API: a cart only becomes checked_out together with its order.
+      throw new Error(`Cart ${cartId} is ${cart.status} but has no order to return`);
     }
-    throw new AppError(409, 'CART_ALREADY_CHECKED_OUT', `Cart ${cartId} is already checked out`);
+    // A retry: return the existing order and write nothing.
+    return { status: 200, order: await getOrderView(client, orderId) };
   }
 
   // c. Lock the cart's products in a fixed order (by id) and read fresh price and stock.
@@ -138,9 +147,6 @@ export async function checkout(client: PoolClient, input: CheckoutInput): Promis
     ],
   );
 
-  // h. Build the response on this same client and store it against the key.
-  const body = await getOrderView(client, orderId);
-  await saveResponse(client, idempotencyKey, 201, body);
-
-  return { status: 201, body, replayed: false };
+  // h. Read the order back on this same client (it sees our uncommitted writes).
+  return { status: 201, order: await getOrderView(client, orderId) };
 }

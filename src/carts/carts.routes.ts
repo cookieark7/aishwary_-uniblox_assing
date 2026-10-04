@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { checkout } from '../checkout/checkout.service.js';
-import { hashRequest, IDEMPOTENCY_HEADER, parseIdempotencyKey } from '../checkout/idempotency.js';
 import { pool, withTransaction } from '../db/pool.js';
 import * as carts from './carts.service.js';
 
@@ -13,8 +12,8 @@ const itemParams = z.object({ cartId: z.uuid(), productId });
 
 const addItemBody = z.strictObject({ productId, quantity });
 const setQuantityBody = z.strictObject({ quantity });
-// No fields yet; coupons will add an optional code here. A missing body means {}.
-const checkoutBody = z.strictObject({});
+// Checkout takes no fields yet (coupons will add one). A missing body counts as {}.
+const checkoutBody = z.object({}).strict();
 
 export const cartsRouter = Router();
 
@@ -55,15 +54,11 @@ cartsRouter.delete('/:cartId/items/:productId', async (req, res) => {
 
 cartsRouter.post('/:cartId/checkout', async (req, res) => {
   const { cartId } = cartParams.parse(req.params);
-  const idempotencyKey = parseIdempotencyKey(req.get(IDEMPOTENCY_HEADER));
-  const body = checkoutBody.parse(req.body ?? {});
-  // Lower-case the id so the same cart always hashes the same, whatever case the client used.
-  const requestHash = hashRequest(`POST /carts/${cartId.toLowerCase()}/checkout`, body);
+  checkoutBody.parse(req.body ?? {});
 
-  const result = await withTransaction((client) =>
-    checkout(client, { cartId, idempotencyKey, requestHash }),
-  );
+  const { status, order } = await checkout(cartId);
 
-  if (result.replayed) res.set('Idempotent-Replayed', 'true');
-  res.status(result.status).json(result.body);
+  // 200 means this cart was already checked out and we are returning its existing order.
+  if (status === 200) res.set('Idempotent-Replayed', 'true');
+  res.status(status).json(order);
 });

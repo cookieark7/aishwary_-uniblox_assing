@@ -154,45 +154,44 @@ curl -X POST localhost:3000/carts/$CART/items \
 }
 ```
 
-### `POST /carts/:cartId/checkout` → `201`
+### `POST /carts/:cartId/checkout` → `201` (or `200` on a retry)
 
-Turns the cart into an order. The request needs an `Idempotency-Key` header. No body fields are accepted yet,
-so send no body or `{}`.
+Turns the cart into an order. Send no body (or `{}`); any body field gives `400 VALIDATION_ERROR`.
+The response is the order view (see `GET /orders/:orderId`).
 
 ```bash
-curl -X POST localhost:3000/carts/$CART/checkout -H "Idempotency-Key: $(uuidgen)"
+curl -X POST localhost:3000/carts/$CART/checkout
 ```
-
-The response is the order view (see `GET /orders/:orderId`).
 
 Everything runs in **one transaction**, in this order:
 
-1. Claim the idempotency key, or replay the stored response (see below).
-2. Close the cart: `UPDATE carts SET status = 'checked_out' … WHERE status = 'open'`.
+1. Close the cart: `UPDATE carts SET status = 'checked_out' … WHERE id = $1 AND status = 'open'`.
+2. If no row changed, either the cart doesn't exist (`404 CART_NOT_FOUND`), or it was already checked out.
+   In the second case this is a retry: we return the cart's existing order with `200` and write nothing.
 3. Lock the cart's products with `FOR UPDATE`, ordered by product id, and read the current price and stock.
+   No items gives `422 CART_EMPTY`.
 4. If any line has `stock < quantity`, fail with `409 INSUFFICIENT_STOCK`. The details list **every** short line.
 5. Decrement stock.
-6. Compute totals in integer paise: `subtotal = Σ price × quantity`, `discount = 0` for now, `total = subtotal − discount`.
+6. Compute totals in integer paise: `subtotal = Σ price × quantity`, `discount = 0` for now,
+   `total = subtotal − discount`.
 7. Insert the order and an `order_items` snapshot holding the name and price at checkout time.
-8. Store the `201` response against the idempotency key.
+8. Return `201` with the order.
 
-Any error rolls back all of it, including the key claim. The cart stays open, stock is untouched, and a retry
-runs from scratch. Locks are always taken in the same order (key, then cart, then products by id), so concurrent
-checkouts can't deadlock.
+Any error rolls back all of it. The cart stays open and stock is untouched. Locks are always taken in the same
+order (cart, then products by id), so concurrent checkouts can't deadlock.
 
-#### Idempotency-Key rules
+#### Retries
 
-- The header is required and must be 1–255 characters. If it's missing or empty you get `400 IDEMPOTENCY_KEY_REQUIRED`;
-  if it's longer than 255 characters you get `400 VALIDATION_ERROR`.
-- Keys are global, not per cart. Each key is bound to a request fingerprint:
-  `sha256("POST /carts/<cartId>/checkout" + JSON(parsed body))`.
-- **Same key, same request, after a success:** the stored `201` body is returned unchanged, with the header
-  `Idempotent-Replayed: true`. No new order is created.
-- **Same key, different request** (e.g. another cart): `422 IDEMPOTENCY_KEY_REUSED`.
-- **Same key sent concurrently:** the duplicates wait on the key's unique index until the first request finishes,
-  then replay its response. All of them get the same order.
-- **Only successes are stored.** If a checkout fails (e.g. `409 INSUFFICIENT_STOCK`), the key is released, and
-  retrying with the same key runs the checkout again.
+Checkout is safe to retry, and no extra header is needed: **the cart itself is the idempotency key**. A cart can
+become an order only once (`orders.cart_id` is `UNIQUE`), and checking out the same cart always returns that same order.
+
+- **First successful call:** `201` with the new order.
+- **Any later call for the same cart:** `200` with the same order body, plus the header `Idempotent-Replayed: true`.
+  Nothing is written again.
+- **Concurrent calls for the same cart:** they queue on the cart's row lock. Exactly one gets `201`; the others
+  wait for it to finish, then get `200` with the same order.
+- **Failures aren't remembered.** If a checkout fails (e.g. `409 INSUFFICIENT_STOCK` or `422 CART_EMPTY`), the
+  cart stays open, so you can fix the problem and call checkout again.
 
 Stock failure example (note `details` is an **array** here, one entry per short line):
 
@@ -252,9 +251,8 @@ src/
   carts/carts.routes.ts   HTTP + zod validation
   carts/carts.service.ts  SQL; takes a pg client so it can run inside a caller's transaction
   checkout/checkout.service.ts  the checkout transaction
-  checkout/idempotency.ts       Idempotency-Key parsing, request hash, claimKey() / saveResponse()
   orders/orders.routes.ts
-  orders/orders.service.ts      getOrderView(): reads the order snapshot
+  orders/orders.service.ts      getOrderView() (reads the order snapshot), findOrderIdByCartId()
   errors.ts      AppError + 404 and central error middleware
   app.ts         createApp(): builds the Express app (imported by tests)
   server.ts      listen() + graceful shutdown
@@ -287,10 +285,7 @@ Every error has the same shape:
 | Edit a cart whose status is not `open`                  | 409    | `CART_NOT_OPEN`                                                         |
 | Cart edit: resulting quantity > current stock           | 409    | `INSUFFICIENT_STOCK` (`details: { productId, requested, available }`)   |
 | Checkout: any line with stock < quantity                | 409    | `INSUFFICIENT_STOCK` (`details: [{ productId, requested, available }]`) |
-| Checkout of a cart that is already checked out          | 409    | `CART_ALREADY_CHECKED_OUT`                                              |
 | Checkout of a cart with no items                        | 422    | `CART_EMPTY`                                                            |
-| Checkout without an `Idempotency-Key` (or empty)        | 400    | `IDEMPOTENCY_KEY_REQUIRED`                                              |
-| `Idempotency-Key` reused for a different request        | 422    | `IDEMPOTENCY_KEY_REUSED`                                                |
 | DB unreachable on `/health`                             | 503    | `DB_UNAVAILABLE`                                                        |
 | Anything else                                           | 500    | `INTERNAL_ERROR`                                                        |
 
