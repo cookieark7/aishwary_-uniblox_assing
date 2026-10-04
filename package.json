@@ -11,7 +11,9 @@
     "start": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "db:setup": "tsx ./src/scripts/db-setup.ts",
+    "db:setup:test": "tsx ./src/scripts/db-setup.ts --test"
   },
   "dependencies": {
     "dotenv": "^18.0.5",

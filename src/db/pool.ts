@@ -3,6 +3,9 @@ import { config } from '../config.js';
 
 export const pool = new pg.Pool({ connectionString: config.DATABASE_URL });
 
+/** Anything that can run a query: the pool itself, or a client checked out for a transaction. */
+export type Queryable = pg.Pool | pg.PoolClient;
+
 // Idle clients can be dropped by the server (Neon suspends idle computes).
 // Without a listener, that error would crash the process.
 pool.on('error', (err) => {

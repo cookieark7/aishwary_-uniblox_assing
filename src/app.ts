@@ -1,6 +1,9 @@
 import express, { type Express } from 'express';
+import { cartsRouter } from './carts/carts.routes.js';
 import { pool } from './db/pool.js';
 import { AppError, errorHandler, notFoundHandler } from './errors.js';
+import { ordersRouter } from './orders/orders.routes.js';
+import { productsRouter } from './products/products.routes.js';
 
 export function createApp(): Express {
   const app = express();
@@ -15,6 +18,10 @@ export function createApp(): Express {
     }
     res.json({ status: 'ok', db: 'ok' });
   });
+
+  app.use('/products', productsRouter);
+  app.use('/carts', cartsRouter);
+  app.use('/orders', ordersRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
