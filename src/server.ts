@@ -1,7 +1,17 @@
 import { createApp } from './app.js';
+import { config } from './config.js';
+import { pool } from './db/pool.js';
 
-const port = Number(process.env.PORT ?? 3000);
-
-createApp().listen(port, () => {
-  console.log(`listening on :${port}`);
+const server = createApp().listen(config.PORT, () => {
+  console.log(`listening on :${config.PORT}`);
 });
+
+function shutdown(signal: string) {
+  console.log(`${signal} received, shutting down`);
+  server.close(() => {
+    pool.end().finally(() => process.exit(0));
+  });
+}
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
