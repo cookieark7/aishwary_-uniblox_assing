@@ -1,0 +1,432 @@
+/*
+ * Atoms + molecules. One class per component, modifiers with `--`.
+ * Layer order mirrors the JS: ui atoms → molecules. Features live in features.css.
+ */
+
+/* ---------- Button (Primary / Secondary / Ghost / Danger) ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  height: 30px;
+  padding: 0 var(--s-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.btn--primary {
+  background: var(--accent);
+  color: #fff;
+}
+.btn--primary:not(:disabled):hover {
+  background: var(--accent-hover);
+}
+.btn--secondary {
+  background: var(--bg-subtle);
+  border-color: var(--border);
+  color: var(--text-primary);
+  font-weight: 400;
+}
+.btn--secondary:not(:disabled):hover {
+  background: var(--bg-hover);
+}
+.btn--ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 400;
+  padding: 0 var(--s-2);
+}
+.btn--ghost:not(:disabled):hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.btn--danger {
+  background: transparent;
+  color: var(--error);
+  font-weight: 400;
+}
+.btn--danger:not(:disabled):hover {
+  background: var(--error-muted);
+}
+.btn--sm {
+  height: 26px;
+  padding: 0 var(--s-2);
+  font-size: var(--text-xs);
+}
+.btn--icon {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+}
+
+/* ---------- Icon ---------- */
+.icon {
+  flex: none;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* ---------- Badge / Pill ---------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  height: 20px;
+  padding: 0 var(--s-2);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+.badge--success {
+  background: var(--success-muted);
+  color: var(--success);
+}
+.badge--error {
+  background: var(--error-muted);
+  color: var(--error);
+}
+.badge--warning {
+  background: var(--warning-muted);
+  color: #9a7400;
+}
+.badge--accent {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+.badge--pill {
+  border-radius: var(--radius-full);
+}
+
+/* ---------- HTTP status chip + method tag ---------- */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.status--2xx {
+  background: var(--success-muted);
+  color: var(--success);
+}
+.status--409 {
+  background: var(--warning-muted);
+  color: #9a7400;
+}
+.status--4xx,
+.status--5xx {
+  background: var(--error-muted);
+  color: var(--error);
+}
+.status--pending,
+.status--0 {
+  background: var(--bg-subtle);
+  color: var(--text-tertiary);
+}
+
+.method {
+  display: inline-block;
+  min-width: 44px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.method--GET {
+  color: var(--text-secondary);
+}
+.method--POST {
+  color: var(--accent);
+}
+.method--PUT {
+  color: #b7791f;
+}
+.method--DELETE {
+  color: var(--error);
+}
+
+/* ---------- Spinner ---------- */
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--border);
+  border-top-color: var(--text-secondary);
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+  flex: none;
+}
+
+/* ---------- Kbd ---------- */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: var(--radius);
+  background: var(--bg-main);
+  color: var(--text-secondary);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1;
+}
+
+/* ---------- Input ---------- */
+.input {
+  height: 30px;
+  padding: 0 var(--s-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  font-size: var(--text-sm);
+  transition: border-color var(--dur-fast) var(--ease);
+}
+.input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  background: var(--bg-main);
+}
+.input--mono {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+}
+.input--qty {
+  width: 56px;
+  text-align: center;
+}
+
+/* ---------- Callout (Notion callout block) ---------- */
+.callout {
+  display: flex;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--radius);
+  background: var(--bg-sidebar);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+.callout > .icon {
+  margin-top: 3px;
+  color: var(--text-secondary);
+}
+.callout__body {
+  flex: 1;
+  min-width: 0;
+}
+.callout__title {
+  font-weight: 500;
+}
+.callout__text {
+  color: var(--text-secondary);
+}
+.callout ul {
+  margin: var(--s-1) 0 0;
+  padding-left: var(--s-5);
+  color: var(--text-secondary);
+}
+.callout--error {
+  background: var(--error-muted);
+}
+.callout--error > .icon {
+  color: var(--error);
+}
+.callout--success {
+  background: var(--success-muted);
+}
+.callout--success > .icon {
+  color: var(--success);
+}
+.callout--warning {
+  background: var(--warning-muted);
+}
+.callout--warning > .icon {
+  color: #9a7400;
+}
+
+/* ---------- Card / Panel ---------- */
+/* Wide tables scroll inside their card; the page itself never scrolls sideways. */
+.table-scroll {
+  position: relative; /* contains .sr-only cells, which are absolutely positioned */
+  overflow-x: auto;
+}
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-main);
+}
+.card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--border);
+}
+.card__title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+}
+.card__body {
+  padding: var(--s-4);
+}
+
+/* ---------- Section label (sidebar groups, small caps) ---------- */
+.label {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ---------- Table (Notion database rows) ---------- */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.table th {
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  text-align: left;
+  white-space: nowrap;
+}
+.table td {
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.table tbody tr {
+  transition: background-color var(--dur-fast) var(--ease);
+}
+.table tbody tr:hover {
+  background: var(--bg-hover);
+}
+.table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.table tfoot td {
+  border-bottom: 0;
+}
+
+/* ---------- Empty state ---------- */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-8) var(--s-4);
+  color: var(--text-secondary);
+  text-align: center;
+}
+.empty .icon {
+  color: var(--text-tertiary);
+}
+.empty__title {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* ---------- Key/value list ---------- */
+.kv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--s-1) var(--s-4);
+  margin: 0;
+}
+.kv dt {
+  color: var(--text-secondary);
+}
+.kv dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.kv .kv__total {
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--border);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ---------- JSON view ---------- */
+.json {
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  max-height: 280px;
+  overflow: auto;
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre;
+}
+.json .j-key {
+  color: #8b5cf6;
+}
+.json .j-str {
+  color: var(--success);
+}
+.json .j-num {
+  color: #b7791f;
+}
+.json .j-lit {
+  color: var(--accent);
+}
+
+/* ---------- Progress bar ---------- */
+.progress {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--bg-subtle);
+  overflow: hidden;
+}
+.progress__bar {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--id-coupons);
+  transition: width var(--dur-page) var(--ease);
+}
+
+/* ---------- Copy button / id ---------- */
+.id {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  color: var(--text-secondary);
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+}

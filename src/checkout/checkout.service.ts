@@ -3,6 +3,11 @@ import { withTransaction } from '../db/pool.js';
 import { AppError } from '../errors.js';
 import { findOrderIdByCartId, getOrderView, type OrderView } from '../orders/orders.service.js';
 
+export interface CheckoutOptions {
+  /** Already trimmed and upper-cased by the route. */
+  couponCode?: string | undefined;
+}
+
 export interface CheckoutResult {
   /** 201 when this call created the order, 200 when the cart was already checked out (a retry). */
   status: 201 | 200;
@@ -19,18 +24,34 @@ interface LockedLine {
 
 /**
  * Turns an open cart into an order, in ONE transaction. The cart itself is the idempotency
- * key: checking out the same cart again returns the order it already produced.
+ * key: checking out the same cart again (with the same options) returns the order it
+ * already produced.
  *
- * Any thrown error rolls back everything, so the cart stays open and a retry runs the
- * checkout again.
+ * Any thrown error rolls back everything: the cart reopens, the coupon (if any) is
+ * released, and stock is untouched, so a retry runs the checkout again.
  *
- * Lock order is always cart row -> product rows by id, so concurrent checkouts cannot deadlock.
+ * Locking and coupons:
+ * - Lock order is always cart -> coupon -> products (by id). Nobody ever holds a product
+ *   lock while waiting for a coupon or a cart, so concurrent checkouts can't deadlock.
+ * - A second checkout using the same coupon code waits on the coupon's row lock. If the
+ *   first commits, the second's UPDATE re-checks the row, sees 'redeemed' and gets 409
+ *   COUPON_ALREADY_REDEEMED. If the first rolls back, the coupon is still 'available', so
+ *   the second claims it and succeeds.
+ * - The coupon is claimed BEFORE the stock check on purpose: a checkout that then fails on
+ *   stock shows that the rollback releases the coupon (it is never lost on a failure).
+ * - Rounding: discount = floor(subtotal * percentOff / 100) in integer paise. Flooring means
+ *   the discount never exceeds the advertised percentage, and the same input always gives
+ *   the same discount.
  */
-export function checkout(cartId: string): Promise<CheckoutResult> {
-  return withTransaction((client) => checkoutInTransaction(client, cartId));
+export function checkout(cartId: string, options: CheckoutOptions = {}): Promise<CheckoutResult> {
+  return withTransaction((client) => checkoutInTransaction(client, cartId, options.couponCode));
 }
 
-async function checkoutInTransaction(client: PoolClient, cartId: string): Promise<CheckoutResult> {
+async function checkoutInTransaction(
+  client: PoolClient,
+  cartId: string,
+  couponCode: string | undefined,
+): Promise<CheckoutResult> {
   // a. Close the cart. This also takes the cart's row lock, which waits for any in-flight
   //    cart edit and makes concurrent checkouts of the same cart queue up behind this one.
   const closed = await client.query(
@@ -40,7 +61,7 @@ async function checkoutInTransaction(client: PoolClient, cartId: string): Promis
     [cartId],
   );
 
-  // b. Nothing was closed: the cart is missing, or this is a retry of a finished checkout.
+  // Nothing was closed: the cart is missing, or this is a retry of a finished checkout.
   //
   //    Concurrent case: a parallel request for the same cart blocks in the UPDATE above on the
   //    cart's row lock until the first checkout finishes.
@@ -62,11 +83,48 @@ async function checkoutInTransaction(client: PoolClient, cartId: string): Promis
       // Unreachable through the API: a cart only becomes checked_out together with its order.
       throw new Error(`Cart ${cartId} is ${cart.status} but has no order to return`);
     }
-    // A retry: return the existing order and write nothing.
-    return { status: 200, order: await getOrderView(client, orderId) };
+    // A retry: return the existing order and write nothing, but only if it asks for the same
+    // thing. Coupon codes are compared after normalisation; either side may be absent.
+    const order = await getOrderView(client, orderId);
+    if ((couponCode ?? null) !== order.couponCode) {
+      throw new AppError(
+        409,
+        'CART_ALREADY_CHECKED_OUT',
+        'this cart was already checked out with different options',
+        { orderId },
+      );
+    }
+    return { status: 200, order };
+  }
+
+  // b. Claim the coupon, if one was sent. The UPDATE takes the coupon's row lock.
+  let coupon: { id: string; percentOff: number } | null = null;
+  if (couponCode !== undefined) {
+    const claimed = await client.query<{ id: string; percent_off: number | string }>(
+      `UPDATE coupons SET status = 'redeemed', redeemed_at = now()
+        WHERE code = $1 AND status = 'available'
+        RETURNING id, percent_off`,
+      [couponCode],
+    );
+    const row = claimed.rows[0];
+    if (!row) {
+      const existing = await client.query('SELECT status FROM coupons WHERE code = $1', [
+        couponCode,
+      ]);
+      if (existing.rowCount === 0) {
+        throw new AppError(422, 'COUPON_INVALID', `Coupon ${couponCode} does not exist`);
+      }
+      throw new AppError(
+        409,
+        'COUPON_ALREADY_REDEEMED',
+        `Coupon ${couponCode} has already been redeemed`,
+      );
+    }
+    coupon = { id: row.id, percentOff: Number(row.percent_off) };
   }
 
   // c. Lock the cart's products in a fixed order (by id) and read fresh price and stock.
+  //    Then check stock and deduct it.
   const { rows } = await client.query<LockedLine>(
     `SELECT ci.product_id, ci.quantity, p.name, p.price_cents, p.stock
        FROM cart_items ci
@@ -89,12 +147,12 @@ async function checkoutInTransaction(client: PoolClient, cartId: string): Promis
       unitPriceCents,
       quantity,
       stock: Number(row.stock),
-      // f. Money stays in integer minor units.
+      // Money stays in integer minor units.
       lineTotalCents: unitPriceCents * quantity,
     };
   });
 
-  // d. Report every short line at once, not just the first.
+  // Report every short line at once, not just the first.
   const shortages = lines
     .filter((line) => line.stock < line.quantity)
     .map((line) => ({
@@ -111,7 +169,7 @@ async function checkoutInTransaction(client: PoolClient, cartId: string): Promis
     );
   }
 
-  // e. Decrement stock. Safe without re-checking: the rows are locked until commit.
+  // Decrement stock. Safe without re-checking: the rows are locked until commit.
   for (const line of lines) {
     await client.query('UPDATE products SET stock = stock - $2, updated_at = now() WHERE id = $1', [
       line.productId,
@@ -119,17 +177,17 @@ async function checkoutInTransaction(client: PoolClient, cartId: string): Promis
     ]);
   }
 
-  // f. Totals.
+  // d. Totals, in integer paise. Floor: never more than the advertised percentage.
   const subtotalCents = lines.reduce((sum, line) => sum + line.lineTotalCents, 0);
-  const discountCents = 0; // TODO(coupons): redeem the coupon here, inside this same transaction.
+  const discountCents = coupon ? Math.floor((subtotalCents * coupon.percentOff) / 100) : 0;
   const totalCents = subtotalCents - discountCents;
 
-  // g. The order and its item snapshot (name and price as of now).
+  // e. The order (with its coupon) and its item snapshot (name and price as of now).
   const order = await client.query<{ id: string }>(
-    `INSERT INTO orders (cart_id, subtotal_cents, discount_cents, total_cents)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO orders (cart_id, coupon_id, subtotal_cents, discount_cents, total_cents)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING id`,
-    [cartId, subtotalCents, discountCents, totalCents],
+    [cartId, coupon?.id ?? null, subtotalCents, discountCents, totalCents],
   );
   const orderId = order.rows[0]!.id;
 
@@ -147,6 +205,6 @@ async function checkoutInTransaction(client: PoolClient, cartId: string): Promis
     ],
   );
 
-  // h. Read the order back on this same client (it sees our uncommitted writes).
+  // Read the order back on this same client (it sees our uncommitted writes).
   return { status: 201, order: await getOrderView(client, orderId) };
 }

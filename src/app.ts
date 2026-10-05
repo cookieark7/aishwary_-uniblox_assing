@@ -1,5 +1,7 @@
 import express, { type Express } from 'express';
+import { fileURLToPath } from 'node:url';
 import { cartsRouter } from './carts/carts.routes.js';
+import { adminRouter } from './coupons/coupons.routes.js';
 import { pool } from './db/pool.js';
 import { AppError, errorHandler, notFoundHandler } from './errors.js';
 import { ordersRouter } from './orders/orders.routes.js';
@@ -22,6 +24,10 @@ export function createApp(): Express {
   app.use('/products', productsRouter);
   app.use('/carts', cartsRouter);
   app.use('/orders', ordersRouter);
+  app.use('/admin', adminRouter);
+
+  // Reviewer UI (web/): plain static files on the same origin, so no CORS and no build step.
+  app.use(express.static(fileURLToPath(new URL('../web', import.meta.url))));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

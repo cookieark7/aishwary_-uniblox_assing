@@ -14,3 +14,6 @@ if (testUrl === fileEnv.DATABASE_URL) {
 }
 
 process.env.DATABASE_URL = testUrl;
+// Small, fixed coupon settings so tests reach milestones quickly and predictably.
+process.env.COUPON_EVERY_N_ORDERS = '3';
+process.env.COUPON_PERCENT_OFF = '10';

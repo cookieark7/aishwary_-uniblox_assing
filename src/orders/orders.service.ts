@@ -16,6 +16,8 @@ export interface OrderView {
   subtotalCents: number;
   discountCents: number;
   totalCents: number;
+  /** The redeemed coupon's code, or null if the order used none. */
+  couponCode: string | null;
   currency: 'INR';
   createdAt: string;
 }
@@ -27,6 +29,7 @@ interface OrderRow {
   subtotal_cents: number | string;
   discount_cents: number | string;
   total_cents: number | string;
+  coupon_code: string | null;
   created_at: Date;
   product_id: string | null;
   product_name: string | null;
@@ -45,13 +48,16 @@ export async function findOrderIdByCartId(db: Queryable, cartId: string): Promis
 
 /**
  * Reads an order purely from its snapshot (orders + order_items), never from products,
- * so later price or name changes do not alter a placed order.
+ * so later price or name changes do not alter a placed order. The coupon join only adds
+ * the code, which never changes once generated.
  */
 export async function getOrderView(db: Queryable, orderId: string): Promise<OrderView> {
   const { rows } = await db.query<OrderRow>(
     `SELECT o.id, o.cart_id, o.subtotal_cents, o.discount_cents, o.total_cents, o.created_at,
+            cp.code AS coupon_code,
             oi.product_id, oi.product_name, oi.unit_price_cents, oi.quantity, oi.line_total_cents
        FROM orders o
+       LEFT JOIN coupons cp ON cp.id = o.coupon_id
        LEFT JOIN order_items oi ON oi.order_id = o.id
       WHERE o.id = $1
       ORDER BY oi.product_id`,
@@ -75,6 +81,7 @@ export async function getOrderView(db: Queryable, orderId: string): Promise<Orde
     subtotalCents: Number(first.subtotal_cents),
     discountCents: Number(first.discount_cents),
     totalCents: Number(first.total_cents),
+    couponCode: first.coupon_code,
     currency: 'INR',
     createdAt: first.created_at.toISOString(),
   };

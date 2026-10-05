@@ -1,0 +1,93 @@
+/*
+ * Design tokens — the DevVault (Notion-derived) system, light mode only.
+ * Use ONLY these. Components never hard-code a colour.
+ */
+:root {
+  /* === BACKGROUNDS === */
+  --bg-main: #ffffff;
+  --bg-sidebar: #f7f7f5;
+  --bg-hover: #efefed;
+  --bg-subtle: #f1f1ef;
+  --bg-elevated: #ffffff;
+
+  /* === BORDERS === */
+  --border: #e9e9e7;
+  --border-focus: #b7b7b5;
+
+  /* === TEXT (warm, never pure black) === */
+  --text-primary: #37352f;
+  --text-secondary: #787774;
+  --text-tertiary: #acaba8;
+
+  /* === ACCENT (Notion blue) === */
+  --accent: #2383e2;
+  --accent-hover: #1a6fc4;
+  --accent-muted: rgba(35, 131, 226, 0.1);
+  --selection: rgba(35, 131, 226, 0.28);
+
+  /*
+   * === SECTION IDENTITY COLOURS ===
+   * One per stage of the backend flow. Icons, badges and accents only — never backgrounds.
+   */
+  --id-shop: #f59e0b; /* amber   — catalog + cart */
+  --id-checkout: #3b82f6; /* blue    — the checkout transaction */
+  --id-orders: #10b981; /* emerald — order snapshots */
+  --id-coupons: #8b5cf6; /* violet  — coupons (admin) */
+  --id-lab: #ec4899; /* pink    — concurrency race lab */
+
+  --id-shop-muted: rgba(245, 158, 11, 0.1);
+  --id-checkout-muted: rgba(59, 130, 246, 0.1);
+  --id-orders-muted: rgba(16, 185, 129, 0.1);
+  --id-coupons-muted: rgba(139, 92, 246, 0.1);
+  --id-lab-muted: rgba(236, 72, 153, 0.1);
+
+  /* === SEMANTIC === */
+  --success: #0f7b6c;
+  --success-muted: rgba(15, 123, 108, 0.1);
+  --error: #eb5757;
+  --error-muted: rgba(235, 87, 87, 0.1);
+  --warning: #dfab01;
+  --warning-muted: rgba(223, 171, 1, 0.12);
+
+  /* === TYPE === */
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', 'Courier New', monospace;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+
+  /* === SPACING (4px scale) === */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-12: 48px;
+
+  /* === SHAPE === */
+  --radius: 4px; /* cards, panels, buttons */
+  --radius-md: 6px; /* menus, popovers */
+  --radius-full: 9999px; /* pills only */
+
+  /* Shadows only on floating elements; flat surfaces stay flat. */
+  --shadow-menu:
+    rgba(15, 15, 15, 0.05) 0 0 0 1px, rgba(15, 15, 15, 0.1) 0 3px 6px,
+    rgba(15, 15, 15, 0.2) 0 9px 24px;
+  --shadow-card: rgba(15, 15, 15, 0.05) 0 0 0 1px, rgba(15, 15, 15, 0.05) 0 2px 4px;
+
+  /* === MOTION — fast and subtle, never bouncy === */
+  --ease: cubic-bezier(0, 0, 0.2, 1); /* easeOut */
+  --dur-fast: 100ms;
+  --dur: 150ms;
+  --dur-page: 200ms;
+
+  /* === LAYOUT === */
+  --sidebar-w: 240px;
+  --inspector-w: 380px;
+  --content-max: 900px;
+}

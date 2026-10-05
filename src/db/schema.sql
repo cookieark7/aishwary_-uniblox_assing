@@ -1,4 +1,4 @@
-DROP TABLE IF EXISTS idempotency_keys, order_items, orders, cart_items, carts, products CASCADE;
+DROP TABLE IF EXISTS idempotency_keys, order_items, orders, coupons, cart_items, carts, products CASCADE;
 
 CREATE TABLE products (
   id          TEXT PRIMARY KEY,
@@ -22,9 +22,21 @@ CREATE TABLE cart_items (
   PRIMARY KEY (cart_id, product_id)
 );
 
+CREATE TABLE coupons (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code        TEXT NOT NULL UNIQUE,
+  milestone   INTEGER NOT NULL UNIQUE CHECK (milestone > 0),
+  percent_off INTEGER NOT NULL CHECK (percent_off BETWEEN 1 AND 100),
+  status      TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available', 'redeemed')),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  redeemed_at TIMESTAMPTZ,
+  CHECK ((status = 'redeemed') = (redeemed_at IS NOT NULL))
+);
+
 CREATE TABLE orders (
   id             UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
   cart_id        UUID    NOT NULL UNIQUE REFERENCES carts(id),
+  coupon_id      UUID    UNIQUE REFERENCES coupons(id),
   subtotal_cents INTEGER NOT NULL CHECK (subtotal_cents >= 0),
   discount_cents INTEGER NOT NULL DEFAULT 0 CHECK (discount_cents >= 0),
   total_cents    INTEGER NOT NULL CHECK (total_cents >= 0),

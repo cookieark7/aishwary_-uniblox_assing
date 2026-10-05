@@ -12,8 +12,10 @@ const itemParams = z.object({ cartId: z.uuid(), productId });
 
 const addItemBody = z.strictObject({ productId, quantity });
 const setQuantityBody = z.strictObject({ quantity });
-// Checkout takes no fields yet (coupons will add one). A missing body counts as {}.
-const checkoutBody = z.object({}).strict();
+// Optional coupon code, normalised (trimmed, upper-cased). A missing body counts as {}.
+const checkoutBody = z
+  .object({ couponCode: z.string().trim().min(1).max(32).toUpperCase().optional() })
+  .strict();
 
 export const cartsRouter = Router();
 
@@ -54,9 +56,9 @@ cartsRouter.delete('/:cartId/items/:productId', async (req, res) => {
 
 cartsRouter.post('/:cartId/checkout', async (req, res) => {
   const { cartId } = cartParams.parse(req.params);
-  checkoutBody.parse(req.body ?? {});
+  const { couponCode } = checkoutBody.parse(req.body ?? {});
 
-  const { status, order } = await checkout(cartId);
+  const { status, order } = await checkout(cartId, { couponCode });
 
   // 200 means this cart was already checked out and we are returning its existing order.
   if (status === 200) res.set('Idempotent-Replayed', 'true');

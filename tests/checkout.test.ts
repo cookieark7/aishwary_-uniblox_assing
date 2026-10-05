@@ -80,6 +80,7 @@ describe('POST /carts/:cartId/checkout', () => {
       subtotalCents: 59999,
       discountCents: 0,
       totalCents: 59999,
+      couponCode: null,
       currency: 'INR',
       createdAt: expect.any(String),
     });
@@ -223,7 +224,7 @@ describe('POST /carts/:cartId/checkout', () => {
     }
   });
 
-  it('10. 404 CART_NOT_FOUND for an unknown cart, 400 for a malformed id or a non-empty body', async () => {
+  it('10. 404 CART_NOT_FOUND for an unknown cart, 400 for a malformed id or an unknown body field', async () => {
     const unknown = await checkout(randomUUID());
     expect(unknown.status).toBe(404);
     expect(unknown.body.error.code).toBe('CART_NOT_FOUND');
@@ -233,7 +234,7 @@ describe('POST /carts/:cartId/checkout', () => {
     expect(malformed.body.error.code).toBe('VALIDATION_ERROR');
 
     const cartId = await cartWith({ p_cable: 1 });
-    const withBody = await checkout(cartId).send({ couponCode: 'X' });
+    const withBody = await checkout(cartId).send({ giftWrap: true });
     expect(withBody.status).toBe(400);
     expect(withBody.body.error.code).toBe('VALIDATION_ERROR');
     expect((await getCart(cartId)).status).toBe('open');

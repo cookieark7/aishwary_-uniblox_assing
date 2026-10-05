@@ -1,0 +1,268 @@
+/*
+ * App shell: Sidebar (240px, fixed) │ Main (flex-1, content max 900px) │ Network inspector.
+ */
+.app {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--inspector-w);
+  min-height: 100vh;
+}
+
+/* ---------- Sidebar ---------- */
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-3) var(--s-2);
+  overflow-y: auto;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+}
+.sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-1) var(--s-2);
+}
+.sidebar__mark {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius);
+  background: var(--text-primary);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700; /* the wordmark is the only place 700 is allowed */
+}
+.sidebar__name {
+  font-weight: 600;
+}
+.sidebar__health {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 0 var(--s-2);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+.dot--ok {
+  background: var(--success);
+}
+.dot--down {
+  background: var(--error);
+}
+
+.nav-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.nav__label {
+  padding: var(--s-1) var(--s-2);
+}
+.nav__item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 5px var(--s-2);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+.nav__item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.nav__item[aria-current='page'] {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+/* The section's identity colour lights up the icon only when active. */
+.nav__item[aria-current='page'] .icon {
+  color: var(--section-color);
+}
+.nav__step {
+  width: 16px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+.nav__text {
+  flex: 1;
+  min-width: 0;
+}
+.nav__count {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.session {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin-top: auto;
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-main);
+  font-size: var(--text-xs);
+}
+.session__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  color: var(--text-secondary);
+}
+.sidebar__hint {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  flex-wrap: wrap;
+  padding: 0 var(--s-2);
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+/* ---------- Main ---------- */
+.main {
+  min-width: 0;
+}
+.page {
+  /* Feature grids respond to the space the page actually has (the inspector takes some). */
+  container-type: inline-size;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--s-12) var(--s-8) var(--s-12);
+}
+/* Only when the route changes — a region re-render must not replay it. */
+.page__stack--enter {
+  animation: fade-in-up var(--dur-page) var(--ease);
+}
+.page__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+}
+
+/* ---------- Top bar (page header) ---------- */
+.topbar {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+}
+.topbar__icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+  background: var(--section-muted);
+  color: var(--section-color);
+  flex: none;
+}
+.topbar__text {
+  flex: 1;
+  min-width: 0;
+}
+.topbar__eyebrow {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+.topbar__desc {
+  color: var(--text-secondary);
+}
+.topbar__actions {
+  display: flex;
+  gap: var(--s-2);
+  flex: none;
+}
+
+/* ---------- Inspector column ---------- */
+.inspector {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-left: 1px solid var(--border);
+  background: var(--bg-main);
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1280px) {
+  :root {
+    --inspector-w: 340px;
+  }
+  .page {
+    padding: var(--s-8) var(--s-6);
+  }
+}
+/* Below this the inspector drops under the page instead of squeezing it. */
+@media (max-width: 1120px) {
+  .app {
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  }
+  .inspector {
+    grid-column: 2;
+    position: static;
+    height: 520px;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}
+@media (max-width: 760px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sidebar {
+    position: static;
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar {
+    gap: var(--s-2);
+  }
+  .nav-groups {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 1px;
+  }
+  .nav {
+    flex-direction: row;
+  }
+  .nav__label,
+  .sidebar__hint {
+    display: none;
+  }
+  .inspector {
+    grid-column: 1;
+  }
+  .page {
+    padding: var(--s-6) var(--s-4);
+  }
+  .topbar {
+    flex-wrap: wrap;
+  }
+}
