@@ -1,0 +1,29 @@
+# Local Postgres for development and tests. Only the database runs in Docker;
+# the app and tests run with Node (npm run dev / npm test).
+#
+#   docker compose up -d --wait   # start and wait until healthy
+#   docker compose down           # stop (data is kept in the volume)
+#   docker compose down -v        # stop and delete all data
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: uniblox-postgres
+    environment:
+      POSTGRES_USER: uniblox
+      POSTGRES_PASSWORD: uniblox
+      POSTGRES_DB: uniblox_dev
+    ports:
+      # 5433 on the host, so it never clashes with a Postgres already running on 5432.
+      - '5433:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Runs once, on first start with an empty volume: creates the test database.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U uniblox -d uniblox_dev']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  pgdata:

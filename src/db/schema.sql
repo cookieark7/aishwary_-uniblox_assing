@@ -54,11 +54,3 @@ CREATE TABLE order_items (
   line_total_cents INTEGER NOT NULL CHECK (line_total_cents = unit_price_cents * quantity),
   PRIMARY KEY (order_id, product_id)
 );
-
-CREATE TABLE idempotency_keys (
-  key             TEXT PRIMARY KEY,
-  request_hash    TEXT NOT NULL,
-  response_status INTEGER,
-  response_body   JSONB,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
-);

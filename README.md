@@ -6,55 +6,65 @@ Runs directly from TypeScript with `tsx`. There is no build step; `tsc --noEmit`
 
 ## Setup
 
-1. Install dependencies:
+Requirements: **Node 20+** and a **Postgres 13+**. The quickest way to get Postgres is the bundled Docker Compose
+file. Docker runs only the official `postgres:16-alpine` image; the app and tests run with Node.
 
-   ```bash
-   npm install
-   ```
+### Quick start (Docker for Postgres)
 
-2. Create your env file:
+```bash
+npm install
+cp .env.example .env      # defaults already point at the Docker database
+npm run db:up             # docker compose up -d --wait: Postgres on localhost:5433
+npm run db:setup          # create tables + seed products (dev database)
+npm run db:setup:test     # same for the test database
+npm test
+npm run dev               # API + reviewer UI on http://localhost:3000
+```
 
-   ```bash
-   cp .env.example .env
-   ```
+The container listens on host port **5433**, so it never clashes with a Postgres already running on 5432. On first
+start it creates two databases: `uniblox_dev` (for `npm run dev`) and `uniblox_test` (wiped before every test).
+Data lives in a Docker volume. `npm run db:down` stops the container, and `docker compose down -v` also deletes the data.
 
-   Set `DATABASE_URL` to your Neon connection string. Use the **direct (non-pooled)** host,
-   the one without `-pooler`, and keep `sslmode=require`. `.env` is git-ignored and must never be committed.
+### Without Docker
 
-   | Variable                | Required   | Default | Notes                                            |
-   | ----------------------- | ---------- | ------- | ------------------------------------------------ |
-   | `DATABASE_URL`          | yes        | none    | `postgres://` or `postgresql://` URL             |
-   | `PORT`                  | no         | `3000`  | Integer between 1 and 65535                      |
-   | `COUPON_EVERY_N_ORDERS` | no         | `5`     | Integer ≥ 1. Every Nth order unlocks one coupon  |
-   | `COUPON_PERCENT_OFF`    | no         | `10`    | Integer 1–100. Discount of each generated coupon |
-   | `TEST_DATABASE_URL`     | tests only | none    | Separate database, **wiped before every test**   |
+Use any Postgres 13+: a local install, or a hosted one such as Neon. Create two empty databases and put their URLs in
+`.env`:
 
-   The process refuses to start if any of these values is invalid.
+```bash
+createdb uniblox_dev
+createdb uniblox_test
+```
 
-3. Create the schema and seed data (this drops and recreates every table):
+For a hosted database, add `?sslmode=require` to both URLs. On Neon, use the **direct** (non-pooled) host. `pg` then
+fully verifies the certificate and prints a one-time, informational `SECURITY WARNING` at startup.
 
-   ```bash
-   npm run db:setup
-   ```
+### Configuration
 
-   ```bash
-   npm run db:setup:test
-   ```
+`.env` is git-ignored and must never be committed. The process refuses to start if any value is invalid.
 
-   > `pg` currently treats `sslmode=require` as `verify-full`, so it fully verifies the server certificate. That works with Neon.
-   > At startup it prints a one-time `SECURITY WARNING` about this; the warning is informational.
+| Variable                | Required   | Default | Notes                                            |
+| ----------------------- | ---------- | ------- | ------------------------------------------------ |
+| `DATABASE_URL`          | yes        | none    | `postgres://` or `postgresql://` URL             |
+| `PORT`                  | no         | `3000`  | Integer between 1 and 65535                      |
+| `COUPON_EVERY_N_ORDERS` | no         | `5`     | Integer ≥ 1. Every Nth order unlocks one coupon  |
+| `COUPON_PERCENT_OFF`    | no         | `10`    | Integer 1–100. Discount of each generated coupon |
+| `TEST_DATABASE_URL`     | tests only | none    | Separate database, **wiped before every test**   |
+
+`npm run db:setup` drops and recreates every table, then seeds the products. Run it any time to reset the data.
 
 ## Scripts
 
-| Command                 | What it does                                  |
-| ----------------------- | --------------------------------------------- |
-| `npm run dev`           | Start with file watching (`tsx watch`)        |
-| `npm start`             | Start the server (`tsx src/server.ts`)        |
-| `npm run typecheck`     | `tsc --noEmit`                                |
-| `npm test`              | Run the vitest suite once                     |
-| `npm run format`        | Format everything with prettier               |
-| `npm run db:setup`      | Reset + seed the `DATABASE_URL` database      |
-| `npm run db:setup:test` | Reset + seed the `TEST_DATABASE_URL` database |
+| Command                 | What it does                                           |
+| ----------------------- | ------------------------------------------------------ |
+| `npm run dev`           | Start with file watching (`tsx watch`)                 |
+| `npm start`             | Start the server (`tsx src/server.ts`)                 |
+| `npm run typecheck`     | `tsc --noEmit`                                         |
+| `npm test`              | Run the vitest suite once                              |
+| `npm run format`        | Format everything with prettier                        |
+| `npm run db:up`         | Start the Docker Postgres and wait until it is healthy |
+| `npm run db:down`       | Stop the Docker Postgres (data is kept)                |
+| `npm run db:setup`      | Reset + seed the `DATABASE_URL` database               |
+| `npm run db:setup:test` | Reset + seed the `TEST_DATABASE_URL` database          |
 
 Check it works:
 
@@ -413,6 +423,40 @@ is 9.9, so the discount is 9 and the total is 90.
 | Checkout with a code that doesn't exist                      | 422    | `COUPON_INVALID`                                                       |
 | Checkout with a code that has already been redeemed          | 409    | `COUPON_ALREADY_REDEEMED`                                              |
 
+## Admin report
+
+### `GET /admin/report` → `200`
+
+Admin only, read-only. A sales summary that reconciles with the orders and coupons the API returns:
+
+```json
+{
+  "ordersPlaced": 4,
+  "grossRevenueCents": 499547,
+  "discountsCents": 34999,
+  "netRevenueCents": 464548,
+  "products": [
+    { "productId": "p_cable", "name": "USB-C Cable", "quantitySold": 3, "grossCents": 89850 },
+    {
+      "productId": "p_headphones",
+      "name": "Noise-Cancelling Headphones",
+      "quantitySold": 0,
+      "grossCents": 0
+    }
+  ],
+  "coupons": { "generated": 1, "available": 0, "redeemed": 1 },
+  "currency": "INR",
+  "generatedAt": "2026-10-05T14:00:00.000Z"
+}
+```
+
+- **Sums come from order snapshots.** Gross = Σ order subtotals, discounts = Σ order discounts, net = Σ order totals.
+  So `net = gross − discounts`, and Σ `products[].grossCents` = gross. Current product prices are never used.
+- **Every product is listed,** including ones that never sold.
+- **One consistent snapshot.** All the queries run in one `REPEATABLE READ READ ONLY` transaction, so the numbers agree
+  with each other even while checkouts are committing.
+- **Nothing is written.** Calling it repeatedly returns the same numbers (apart from `generatedAt`).
+
 ## Layout
 
 ```
@@ -427,8 +471,9 @@ src/
   carts/carts.service.ts  SQL; takes a pg client so it can run inside a caller's transaction
   checkout/checkout.service.ts  the checkout transaction
   orders/orders.routes.ts
-  coupons/coupons.routes.ts      /admin/coupons (admin only, no auth yet)
+  admin/admin.routes.ts          /admin/coupons and /admin/report (admin only, no auth yet)
   coupons/coupons.service.ts     getMilestoneStatus(), generateCoupon(), listCoupons()
+  reports/report.service.ts      getReport(): the admin sales summary
   orders/orders.service.ts      getOrderView() (reads the order snapshot), findOrderIdByCartId()
   errors.ts      AppError + 404 and central error middleware
   app.ts         createApp(): builds the Express app (imported by tests)
@@ -441,7 +486,10 @@ tests/
   checkout.test.ts
   coupons.generate.test.ts
   coupons.redeem.test.ts
+  report.test.ts
 web/             reviewer UI (see "Reviewer UI" above), served by app.ts as static files
+docker-compose.yml               local Postgres only (postgres:16-alpine on port 5433)
+docker/postgres/init/            first-start SQL: creates the test database
 ```
 
 ## Error responses

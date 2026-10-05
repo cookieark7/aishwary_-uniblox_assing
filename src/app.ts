@@ -1,7 +1,7 @@
 import express, { type Express } from 'express';
 import { fileURLToPath } from 'node:url';
 import { cartsRouter } from './carts/carts.routes.js';
-import { adminRouter } from './coupons/coupons.routes.js';
+import { adminRouter } from './admin/admin.routes.js';
 import { pool } from './db/pool.js';
 import { AppError, errorHandler, notFoundHandler } from './errors.js';
 import { ordersRouter } from './orders/orders.routes.js';
